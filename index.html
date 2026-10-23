@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OTTC Math Tutor by AK</title>
+    <meta name="description" content="OTTC Math Tutor by AK: An LLM-based pedagogical math tutoring chatbot featuring multi-stage solution analysis, adaptive hints, misconception detection, and real-time evaluation." />
+    <meta property="og:title" content="OTTC Math Tutor by AK" />
+    <meta property="og:description" content="OTTC Math Tutor by AK: An LLM-based pedagogical math tutoring chatbot featuring multi-stage solution analysis, adaptive hints, misconception detection, and real-time evaluation." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;700&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body, html {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            background-color: #020205; /* Deep rich dark background */
+        }
+
+        /* 3D Canvas Background */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+        }
+
+        /* Subtle vignette effect */
+        .vignette {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 50%, #020205 150%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Overlay UI Container */
+        .brand-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            pointer-events: none; /* Allow interaction with 3D bg behind */
+        }
+
+        @keyframes pulseGlow {
+            0% { filter: drop-shadow(0 0 15px rgba(100, 200, 255, 0.5)); transform: scale(1); }
+            50% { filter: drop-shadow(0 0 35px rgba(100, 200, 255, 0.9)); transform: scale(1.03); }
+            100% { filter: drop-shadow(0 0 15px rgba(100, 200, 255, 0.5)); transform: scale(1); }
+        }
+
+        @keyframes floatGentle {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+            100% { transform: translateY(0px); }
+        }
+
+        .brand-title {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 6rem;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            margin-left: 0.15em; /* Optical alignment */
+            color: #ffffff;
+            background: linear-gradient(to right, #e0eafc, #cfdef3);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0px 10px 40px rgba(255, 255, 255, 0.2);
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
+
+        .brand-subtitle {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 400;
+            letter-spacing: 0.4em;
+            color: #a0aec0;
+            text-transform: uppercase;
+            position: relative;
+        }
+        
+        .brand-subtitle::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 2px;
+            background: rgba(100, 200, 255, 0.6);
+        }
+
+        .accent-color {
+            color: #64c8ff;
+            font-weight: 700;
+        }
+
+        /* Profile Icon Styling */
+        .profile-wrapper {
+            position: relative;
+            width: 140px;
+            height: 140px;
+            margin-bottom: 2rem;
+            animation: floatGentle 6s infinite ease-in-out;
+        }
+
+        .profile-image {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid rgba(100, 200, 255, 0.4);
+            box-shadow: 0 0 30px rgba(100, 200, 255, 0.3);
+            position: relative;
+            z-index: 2;
+        }
+
+        .profile-ring {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 0%, rgba(100, 200, 255, 0.8) 50%, transparent 100%);
+            animation: spinRing 4s linear infinite;
+            z-index: 1;
+            filter: blur(5px);
+        }
+
+        @keyframes spinRing {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Ensure React root floats above all this */
+        #root {
+            position: relative;
+            z-index: 10;
+        }
+    </style>
+  </head>
+  <body>
+    <!-- 3D Canvas Background -->
+    <div id="bg-canvas"></div>
+    <div class="vignette"></div>
+
+    <!-- Central Logo and Brand Area -->
+    <div class="brand-container">
+        <!-- Profile Picture based Icon -->
+        <div class="profile-wrapper">
+            <div class="profile-ring"></div>
+            <!-- Falling back to a placeholder if abhi.png is not found, user should provide the file -->
+            <img src="/abhi.png" alt="AK Profile" class="profile-image" onerror="this.src='https://ui-avatars.com/api/?name=A+K&background=0D8ABC&color=fff&size=140&rounded=true'">
+        </div>
+
+        <!-- Brand Text -->
+        <h1 class="brand-title">OTTC</h1>
+        <h2 class="brand-subtitle">BY <span class="accent-color">AK</span></h2>
+    </div>
+
+    <div id="root"></div>
+    
+    <script>
+        // Three.js Setup
+        const container = document.getElementById('bg-canvas');
+        const scene = new THREE.Scene();
+        // Add a very subtle fog to fade particles in the distance
+        scene.fog = new THREE.FogExp2(0x020205, 0.001);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+        camera.position.z = 400;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        // Particle System Geometry
+        const geometry = new THREE.BufferGeometry();
+        const particlesCount = 2500; // Increased count for better 3D volume
+        
+        const posArray = new Float32Array(particlesCount * 3);
+        const colorsArray = new Float32Array(particlesCount * 3);
+        
+        // Define colors
+        const colorPrimary = new THREE.Color(0xffffff); // White
+        const colorSecondary = new THREE.Color(0x64c8ff); // Light Blue
+        
+        for(let i = 0; i < particlesCount * 3; i+=3) {
+            // Distribute particles in a large sphere
+            const radius = 1000;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(Math.random() * 2 - 1);
+            
+            const r = Math.cbrt(Math.random()) * radius; // Even distribution inside sphere
+            
+            posArray[i] = r * Math.sin(phi) * Math.cos(theta);     // x
+            posArray[i+1] = r * Math.sin(phi) * Math.sin(theta);   // y
+            posArray[i+2] = r * Math.cos(phi);                     // z
+            
+            // Mix colors
+            const mixedColor = Math.random() > 0.5 ? colorPrimary : colorSecondary;
+            colorsArray[i] = mixedColor.r;
+            colorsArray[i+1] = mixedColor.g;
+            colorsArray[i+2] = mixedColor.b;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colorsArray, 3));
+
+        // Custom material for glowing particles
+        const material = new THREE.PointsMaterial({
+            size: 3,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
+            transparent: true,
+            opacity: 0.8,
+            sizeAttenuation: true
+        });
+
+        const particlesMesh = new THREE.Points(geometry, material);
+        scene.add(particlesMesh);
+
+        // Create an outer wireframe sphere for structural depth
+        const sphereGeo = new THREE.IcosahedronGeometry(600, 2);
+        const sphereMat = new THREE.MeshBasicMaterial({
+            color: 0x64c8ff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.05
+        });
+        const structureSphere = new THREE.Mesh(sphereGeo, sphereMat);
+        scene.add(structureSphere);
+
+        // Mouse interaction
+        let mouseX = 0;
+        let mouseY = 0;
+        let targetX = 0;
+        let targetY = 0;
+        const windowHalfX = window.innerWidth / 2;
+        const windowHalfY = window.innerHeight / 2;
+
+        document.addEventListener('mousemove', (event) => {
+            mouseX = (event.clientX - windowHalfX);
+            mouseY = (event.clientY - windowHalfY);
+        });
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Animation Loop
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const elapsedTime = clock.getElapsedTime();
+
+            // Rotate the entire particle system slowly
+            particlesMesh.rotation.y = elapsedTime * 0.05;
+            particlesMesh.rotation.x = elapsedTime * 0.02;
+            
+            // Rotate the structural sphere in opposite direction
+            structureSphere.rotation.y = -elapsedTime * 0.03;
+            structureSphere.rotation.z = elapsedTime * 0.01;
+
+            // Smoothly move camera based on mouse position
+            targetX = mouseX * 0.2;
+            targetY = mouseY * 0.2;
+            
+            camera.position.x += (targetX - camera.position.x) * 0.02;
+            camera.position.y += (-targetY - camera.position.y) * 0.02;
+            camera.lookAt(scene.position);
+
+            // Animate individual particles (gentle wave effect)
+            const positions = geometry.attributes.position.array;
+            for(let i = 0; i < particlesCount; i++) {
+                const i3 = i * 3;
+                const x = positions[i3];
+                const y = positions[i3+1];
+                const z = positions[i3+2];
+                
+                // Add subtle movement to particles based on time and their position
+                positions[i3+1] += Math.sin(elapsedTime * 0.5 + x * 0.01) * 0.2;
+            }
+            geometry.attributes.position.needsUpdate = true;
+
+            renderer.render(scene, camera);
+        }
+
+        // Start animation immediately
+        animate();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

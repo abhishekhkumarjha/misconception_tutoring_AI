@@ -1,0 +1,6 @@
+{
+  "name": "Math Tutor Chatbot",
+  "description": "An LLM-based pedagogical math tutoring chatbot featuring multi-stage solution analysis, Socratic hints, misconception detection, and real-time evaluation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

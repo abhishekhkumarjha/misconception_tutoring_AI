@@ -1,0 +1,1 @@
+{"problem_id":"ALG_LINEAR_0001","solution_steps":[{"step":1,"expression":"2x + 5 = 15","action":"subtract_constant","explanation":"Subtract 5 from both sides."},{"step":2,"expression":"2x = 10","action":"simplify"},{"step":3,"expression":"x = 5","action":"divide_coefficient","explanation":"Divide both sides by 2."}]}
