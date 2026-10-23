@@ -34,7 +34,7 @@ function getGeminiClient(): GoogleGenAI | null {
       apiKey,
       httpOptions: {
         headers: {
-          'User-Agent': 'aistudio-build',
+          'User-Agent': 'misconception-tutoring-ai',
         },
       },
     });
