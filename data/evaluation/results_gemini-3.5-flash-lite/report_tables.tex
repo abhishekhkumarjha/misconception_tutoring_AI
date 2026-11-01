@@ -1,0 +1,18 @@
+% Requires \usepackage{booktabs}
+\begin{table}[t]\centering\small
+\caption{Error detection on MathDial test (47 problems, 94 submissions; positive class = incorrect). Underlying LLM: gemini-3.5-flash-lite.}
+\begin{tabular}{lcccccc}\toprule
+System & Acc. & Prec. & Rec. & F1 & $\kappa$ & FAR \\\midrule
+Full system (RAG + TalkMoves) & 90.4 & 83.9 & 100.0 & 91.3 & 0.81 & 19.1 \\
+w/o RAG (ablation) & 90.4 & 83.9 & 100.0 & 91.3 & 0.81 & 19.1 \\
+Generic tutor baseline & 96.8 & 95.8 & 97.9 & 96.8 & 0.94 & 4.3 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[t]\centering\small
+\caption{Misconception diagnosis and tutor response quality on 47 incorrect student solutions (judge: gemini-3.1-flash-lite). RA = reveals answer (lower is better).}
+\begin{tabular}{lcccccccc}\toprule
+System & Match & Match+Part. & Localized & Targets & RA$\downarrow$ & Math OK & Socratic & Quality \\\midrule
+Full system (RAG + TalkMoves) & 66.0 & 68.1 & 87.2 & 68.1 & 0.0 & 89.4 & 100.0 & 4.19 \\
+w/o RAG (ablation) & 70.2 & 72.3 & 87.2 & 72.3 & 0.0 & 87.2 & 100.0 & 4.09 \\
+Generic tutor baseline & 61.7 & 63.8 & 87.2 & 63.8 & 85.1*** & 89.4 & 14.9*** & 2.72*** \\
+\bottomrule\end{tabular}\end{table}

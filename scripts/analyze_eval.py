@@ -17,10 +17,11 @@ from scipy.stats import binomtest, wilcoxon
 
 SYSTEM_NAMES = {
     "full": "Full system (RAG + TalkMoves)",
+    "full_v1": "Full system, original prompt (v1)",
     "norag": "w/o RAG (ablation)",
     "baseline": "Generic tutor baseline",
 }
-ORDER = ["full", "norag", "baseline"]
+ORDER = ["full", "full_v1", "norag", "baseline"]
 
 
 def load_jsonl(path):
@@ -124,11 +125,18 @@ def star(p):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="data/evaluation/results")
-    d = Path(ap.parse_args().dir)
+    ap.add_argument("--systems", default=",".join(ORDER), help="comma-separated subset, e.g. full,baseline")
+    ap.add_argument("--label", action="append", default=[], help='rename a row, e.g. --label "full=Full system, improved (v2)"')
+    args = ap.parse_args()
+    for spec in args.label:
+        key, _, name = spec.partition("=")
+        SYSTEM_NAMES[key] = name
+    d = Path(args.dir)
+    wanted = args.systems.split(",")
     raw_preds = load_jsonl(d / "predictions.jsonl")
     preds = latest_ok(raw_preds)
     judg = {(j["system"], j["id"]): j for j in load_jsonl(d / "judgments.jsonl")}
-    systems = [s for s in ORDER if any(k[0] == s for k in preds)]
+    systems = [s for s in ORDER if s in wanted and any(k[0] == s for k in preds)]
 
     # Paired evaluation: only problems every system answered for both variants.
     qids_by_sys = {}
@@ -156,6 +164,8 @@ def main():
                 ci[k] = bootstrap(judged_common, lambda qs, k=k: judged_metrics(js_for(qs))[k])
         lat = sorted(preds[(s, f"{q}:{v}")]["latencyMs"] for q in common for v in ("incorrect", "correct"))
         failures = sum(1 for r in raw_preds if r["system"] == s and r.get("error"))
+        attempted = {r["id"] for r in raw_preds if r["system"] == s}
+        never_ok = sum(1 for i in attempted if (s, i) not in preds)
         unparsed = sum(1 for r in recs_for(common) if r.get("predicted") is None)
         self_acc = [r["selfScores"]["accuracy_score"] for r in recs_for(common)
                     if isinstance(r.get("selfScores"), dict) and isinstance(r["selfScores"].get("accuracy_score"), (int, float))]
@@ -163,6 +173,7 @@ def main():
             "detection": det, "judged": jm, "ci": ci,
             "latency_median_ms": lat[len(lat) // 2] if lat else None,
             "api_failures_retried": failures, "unparsed_outputs": unparsed,
+            "items_attempted": len(attempted), "items_failed": never_ok,
             "self_reported_accuracy_mean": sum(self_acc) / len(self_acc) if self_acc else None,
         }
 
@@ -232,12 +243,12 @@ def main():
                   f"{fmt_ci(jm['quality'], ci['quality'], scale=1, dp=2)}{star(p(s, 'quality'))} |")
 
     md.append("\n**Table 4. Operational**\n")
-    md.append("| System | Median latency (s) | Unparseable outputs | Self-reported accuracy score (mean, 0–100) |")
+    md.append("| System | Median latency (s) | Failed items (malformed output, after retries) | Self-reported accuracy score (mean, 0–100) |")
     md.append("|---|---|---|---|")
     for s in systems:
         x = S[s]
         sr = f"{x['self_reported_accuracy_mean']:.1f}" if x["self_reported_accuracy_mean"] is not None else "n/a"
-        md.append(f"| {SYSTEM_NAMES[s]} | {x['latency_median_ms'] / 1000:.1f} | {x['unparsed_outputs']} | {sr} |")
+        md.append(f"| {SYSTEM_NAMES[s]} | {x['latency_median_ms'] / 1000:.1f} | {x['items_failed']}/{x['items_attempted']} | {sr} |")
 
     md.append("\nSignificance vs. full system (paired; exact McNemar, Wilcoxon for quality): * p<0.05, ** p<0.01, *** p<0.001. Marks appear on the compared system's row.")
     (d / "report_tables.md").write_text("\n".join(md) + "\n", encoding="utf-8")

@@ -1,0 +1,281 @@
+{
+  "system_model": "gemini-3.5-flash-lite",
+  "judge_model": "gemini-3.1-flash-lite",
+  "n_problems": 29,
+  "n_judged_problems": 29,
+  "systems": {
+    "full": {
+      "detection": {
+        "n": 58,
+        "accuracy": 0.9655172413793104,
+        "precision": 0.9354838709677419,
+        "recall": 1.0,
+        "f1": 0.9666666666666666,
+        "macro_f1": 0.9654761904761904,
+        "kappa": 0.9310344827586208,
+        "false_alarm_rate": 0.06896551724137931,
+        "tp": 29,
+        "fn": 0,
+        "fp": 2,
+        "tn": 27
+      },
+      "judged": {
+        "n": 29,
+        "match": 0.6551724137931034,
+        "match_or_partial": 0.6551724137931034,
+        "error_localized": 0.8620689655172413,
+        "targets_misconception": 0.6896551724137931,
+        "reveals_answer": 0.034482758620689655,
+        "mathematically_correct": 0.896551724137931,
+        "socratic": 1.0,
+        "quality": 4.137931034482759
+      },
+      "ci": {
+        "accuracy": [
+          0.9137931034482759,
+          1.0
+        ],
+        "f1": [
+          0.9206349206349206,
+          1.0
+        ],
+        "kappa": [
+          0.8275862068965518,
+          1.0
+        ],
+        "false_alarm_rate": [
+          0.0,
+          0.1724137931034483
+        ],
+        "match": [
+          0.4827586206896552,
+          0.8275862068965517
+        ],
+        "match_or_partial": [
+          0.4827586206896552,
+          0.8275862068965517
+        ],
+        "error_localized": [
+          0.7241379310344828,
+          0.9655172413793104
+        ],
+        "targets_misconception": [
+          0.5172413793103449,
+          0.8620689655172413
+        ],
+        "reveals_answer": [
+          0.0,
+          0.10344827586206896
+        ],
+        "mathematically_correct": [
+          0.7586206896551724,
+          1.0
+        ],
+        "socratic": [
+          1.0,
+          1.0
+        ],
+        "quality": [
+          3.6551724137931036,
+          4.586206896551724
+        ]
+      },
+      "latency_median_ms": 6536,
+      "api_failures_retried": 0,
+      "unparsed_outputs": 0,
+      "items_attempted": 60,
+      "items_failed": 0,
+      "self_reported_accuracy_mean": 80.60344827586206
+    },
+    "full_v1": {
+      "detection": {
+        "n": 58,
+        "accuracy": 0.8448275862068966,
+        "precision": 0.7631578947368421,
+        "recall": 1.0,
+        "f1": 0.8656716417910448,
+        "macro_f1": 0.8409990862016449,
+        "kappa": 0.6896551724137931,
+        "false_alarm_rate": 0.3103448275862069,
+        "tp": 29,
+        "fn": 0,
+        "fp": 9,
+        "tn": 20
+      },
+      "judged": {
+        "n": 29,
+        "match": 0.6206896551724138,
+        "match_or_partial": 0.6206896551724138,
+        "error_localized": 0.896551724137931,
+        "targets_misconception": 0.6551724137931034,
+        "reveals_answer": 0.0,
+        "mathematically_correct": 0.7931034482758621,
+        "socratic": 1.0,
+        "quality": 3.9310344827586206
+      },
+      "ci": {
+        "accuracy": [
+          0.7586206896551724,
+          0.9310344827586207
+        ],
+        "f1": [
+          0.8055555555555556,
+          0.9354838709677419
+        ],
+        "kappa": [
+          0.5172413793103448,
+          0.8620689655172413
+        ],
+        "false_alarm_rate": [
+          0.13793103448275862,
+          0.4827586206896552
+        ],
+        "match": [
+          0.4482758620689655,
+          0.7931034482758621
+        ],
+        "match_or_partial": [
+          0.4482758620689655,
+          0.7931034482758621
+        ],
+        "error_localized": [
+          0.7931034482758621,
+          1.0
+        ],
+        "targets_misconception": [
+          0.4827586206896552,
+          0.8275862068965517
+        ],
+        "reveals_answer": [
+          0.0,
+          0.0
+        ],
+        "mathematically_correct": [
+          0.6206896551724138,
+          0.9310344827586207
+        ],
+        "socratic": [
+          1.0,
+          1.0
+        ],
+        "quality": [
+          3.4482758620689653,
+          4.379310344827586
+        ]
+      },
+      "latency_median_ms": 6993,
+      "api_failures_retried": 1,
+      "unparsed_outputs": 0,
+      "items_attempted": 60,
+      "items_failed": 1,
+      "self_reported_accuracy_mean": 76.63793103448276
+    },
+    "baseline": {
+      "detection": {
+        "n": 58,
+        "accuracy": 0.9482758620689655,
+        "precision": 0.90625,
+        "recall": 1.0,
+        "f1": 0.9508196721311475,
+        "macro_f1": 0.9481371087928465,
+        "kappa": 0.896551724137931,
+        "false_alarm_rate": 0.10344827586206896,
+        "tp": 29,
+        "fn": 0,
+        "fp": 3,
+        "tn": 26
+      },
+      "judged": {
+        "n": 29,
+        "match": 0.5862068965517241,
+        "match_or_partial": 0.6206896551724138,
+        "error_localized": 0.8620689655172413,
+        "targets_misconception": 0.6206896551724138,
+        "reveals_answer": 1.0,
+        "mathematically_correct": 0.9310344827586207,
+        "socratic": 0.0,
+        "quality": 2.586206896551724
+      },
+      "ci": {
+        "accuracy": [
+          0.8793103448275862,
+          1.0
+        ],
+        "f1": [
+          0.8923076923076924,
+          1.0
+        ],
+        "kappa": [
+          0.7586206896551724,
+          1.0
+        ],
+        "false_alarm_rate": [
+          0.0,
+          0.2413793103448276
+        ],
+        "match": [
+          0.41379310344827586,
+          0.7586206896551724
+        ],
+        "match_or_partial": [
+          0.4482758620689655,
+          0.7931034482758621
+        ],
+        "error_localized": [
+          0.7241379310344828,
+          0.9655172413793104
+        ],
+        "targets_misconception": [
+          0.4482758620689655,
+          0.7931034482758621
+        ],
+        "reveals_answer": [
+          1.0,
+          1.0
+        ],
+        "mathematically_correct": [
+          0.8275862068965517,
+          1.0
+        ],
+        "socratic": [
+          0.0,
+          0.0
+        ],
+        "quality": [
+          2.3793103448275863,
+          2.793103448275862
+        ]
+      },
+      "latency_median_ms": 3752,
+      "api_failures_retried": 0,
+      "unparsed_outputs": 0,
+      "items_attempted": 60,
+      "items_failed": 0,
+      "self_reported_accuracy_mean": null
+    }
+  },
+  "paired_tests_vs_full": {
+    "full_v1": {
+      "detection_correct": 0.015625,
+      "match": 1.0,
+      "match_or_partial": 1.0,
+      "error_localized": 1.0,
+      "targets_misconception": 1.0,
+      "reveals_answer": 1.0,
+      "mathematically_correct": 0.453125,
+      "socratic": 1.0,
+      "quality": 0.6663734021972219
+    },
+    "baseline": {
+      "detection_correct": 1.0,
+      "match": 0.6875,
+      "match_or_partial": 1.0,
+      "error_localized": 1.0,
+      "targets_misconception": 0.6875,
+      "reveals_answer": 7.450580596923828e-09,
+      "mathematically_correct": 1.0,
+      "socratic": 3.725290298461914e-09,
+      "quality": 2.7664135173525545e-05
+    }
+  }
+}

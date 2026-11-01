@@ -1,0 +1,12 @@
+{"id": "5001037:incorrect", "system": "baseline", "auditor": "claude-opus-5-5", "misconception_match": "match", "judge_label": "match"}
+{"id": "5000744:incorrect", "system": "baseline", "auditor": "claude-opus-5-5", "misconception_match": "match", "judge_label": "match"}
+{"id": "6000063:incorrect", "system": "baseline", "auditor": "claude-opus-5-5", "misconception_match": "match", "judge_label": "match"}
+{"id": "5000709:incorrect", "system": "baseline", "auditor": "claude-opus-5-5", "misconception_match": "match", "judge_label": "match"}
+{"id": "5000311:incorrect", "system": "full", "auditor": "claude-opus-5-5", "misconception_match": "partial", "judge_label": "match"}
+{"id": "5000580:incorrect", "system": "full", "auditor": "claude-opus-5-5", "misconception_match": "partial", "judge_label": "no_match"}
+{"id": "5000782:incorrect", "system": "baseline", "auditor": "claude-opus-5-5", "misconception_match": "match", "judge_label": "match"}
+{"id": "5001133:incorrect", "system": "full", "auditor": "claude-opus-5-5", "misconception_match": "match", "judge_label": "match"}
+{"id": "5001009:incorrect", "system": "full", "auditor": "claude-opus-5-5", "misconception_match": "partial", "judge_label": "partial"}
+{"id": "5000021:incorrect", "system": "baseline", "auditor": "claude-opus-5-5", "misconception_match": "no_match", "judge_label": "no_match"}
+{"id": "5000859:incorrect", "system": "baseline", "auditor": "claude-opus-5-5", "misconception_match": "no_match", "judge_label": "no_match"}
+{"id": "5000003:incorrect", "system": "baseline", "auditor": "claude-opus-5-5", "misconception_match": "no_match", "judge_label": "no_match"}

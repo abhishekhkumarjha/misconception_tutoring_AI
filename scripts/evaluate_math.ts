@@ -81,7 +81,9 @@ for (let i = pool.length - 1; i > 0; i--) {
   const j = Math.floor(rng() * (i + 1));
   [pool[i], pool[j]] = [pool[j], pool[i]];
 }
-const sample = pool.slice(0, N);
+// --offset selects a disjoint slice of the same shuffled pool (e.g. a held-out set after tuning on the first N)
+const OFFSET = parseInt(arg('offset', '0'), 10);
+const sample = pool.slice(OFFSET, OFFSET + N);
 
 const finalAnswer = (solution: string) => solution.trim().split('\n').pop()!.trim();
 
@@ -129,7 +131,7 @@ function buildRagMirror(): string {
 // ── Rate-limited, retrying client wrapper (free tier: ~5 RPM, 20 requests/day per model) ──
 class QuotaExhausted extends Error {}
 const lastCallAt: Record<string, number> = {};
-const MIN_INTERVAL_MS: Record<string, number> = { generate: 12500, embed: 700 };
+const MIN_INTERVAL_MS: Record<string, number> = { generate: parseInt(arg('interval-ms', '12500'), 10), embed: 700 };
 const callLog = { lastText: null as string | null, lastFailed: false, lastError: null as unknown, embedFailures: 0 };
 
 async function withRetry<T>(kind: 'generate' | 'embed', model: string, fn: () => Promise<T>): Promise<T> {
@@ -241,7 +243,7 @@ async function main() {
   if (!keys.length) throw new Error('Set EVAL_GEMINI_API_KEY or GEMINI_API_KEY in .env');
   const [apiKey, ...extraKeys] = keys;
 
-  console.log(`MathDial test: ${byQid.size} unique problems; sampled ${sample.length} (seed ${SEED}) -> ${items.length} items`);
+  console.log(`MathDial test: ${byQid.size} unique problems; sampled ${sample.length} (seed ${SEED}, offset ${OFFSET}) -> ${items.length} items`);
   console.log(`System model: ${SYSTEM_MODEL} | judge model: ${JUDGE_MODEL}`);
   const mirror = buildRagMirror();
   process.chdir(mirror); // rag.ts and conversationEngine.ts resolve data/ from cwd
@@ -277,7 +279,8 @@ async function main() {
             });
             raw = parseJSON(callLog.lastText);
           } else {
-            ragContext = system === 'full'
+            // any 'full*' system (e.g. full_v1 kept for comparison) runs the RAG pipeline as currently on disk
+            ragContext = system.startsWith('full')
               ? await rag.retrieveContextForPipeline(ai, item.problem, item.attempt, 'Medium', 3)
               : '(RAG not provided)';
             await runPipelineCall(() =>
