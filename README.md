@@ -44,6 +44,23 @@ An LLM-based pedagogical tutoring system with multi-stage solution analysis, ada
    ```
    Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+## Evaluation
+
+The math pipeline is evaluated offline on the MathDial test split: each sampled problem is submitted twice
+(the real, teacher-annotated incorrect student solution and the reference solution), and the full pipeline is
+compared with a no-RAG ablation and a generic-tutor baseline that uses the same LLM. An LLM judge compares
+the diagnosed misconception with the teacher's annotation and rates the tutor reply.
+
+```bash
+npx tsx scripts/evaluate_math.ts --n 50 --seed 42 --systems full,baseline,norag \
+  [--system-model gemini-2.5-flash] [--judge-model gemini-3.5-flash] [--out data/evaluation/results]
+python scripts/analyze_eval.py --dir data/evaluation/results
+```
+
+- The RAG index is rebuilt without any MathDial test problem before evaluating (`process_datasets.cjs` indexes train and test together).
+- Runs resume where they stopped; `EVAL_GEMINI_API_KEY` in `.env` may list several comma-separated keys, rotated when one hits its daily quota.
+- `analyze_eval.py` writes `report_tables.md`, `report_tables.tex` and `metrics.json` (95% bootstrap CIs, paired McNemar/Wilcoxon tests).
+
 ## Tech Stack
 
 - **Frontend**: React 19, TypeScript, Tailwind CSS, Motion, Lucide Icons, Three.js

@@ -1,0 +1,13 @@
+% Requires \usepackage{booktabs}
+\begin{table}[t]\centering\small
+\caption{Error detection on MathDial test (6 problems, 12 submissions; positive class = incorrect). Underlying LLM: gemini-2.5-flash.}
+\begin{tabular}{lcccccc}\toprule
+System & Acc. & Prec. & Rec. & F1 & $\kappa$ & FAR \\\midrule
+Full system (RAG + TalkMoves) & 100.0 & 100.0 & 100.0 & 100.0 & 1.00 & 0.0 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[t]\centering\small
+\caption{Misconception diagnosis and tutor response quality on 0 incorrect student solutions (judge: LLM judge). RA = reveals answer (lower is better).}
+\begin{tabular}{lcccccccc}\toprule
+System & Match & Match+Part. & Localized & Targets & RA$\downarrow$ & Math OK & Socratic & Quality \\\midrule
+\bottomrule\end{tabular}\end{table}

@@ -1,0 +1,90 @@
+{
+  "system_model": "gemini-3.5-flash",
+  "judge_model": "gemini-3-flash-preview",
+  "n_problems": 13,
+  "n_judged_problems": 13,
+  "systems": {
+    "full": {
+      "detection": {
+        "n": 26,
+        "accuracy": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "macro_f1": 1.0,
+        "kappa": 1.0,
+        "false_alarm_rate": 0.0,
+        "tp": 13,
+        "fn": 0,
+        "fp": 0,
+        "tn": 13
+      },
+      "judged": {
+        "n": 13,
+        "match": 0.7692307692307693,
+        "match_or_partial": 0.9230769230769231,
+        "error_localized": 1.0,
+        "targets_misconception": 1.0,
+        "reveals_answer": 0.0,
+        "mathematically_correct": 1.0,
+        "socratic": 1.0,
+        "quality": 5.0
+      },
+      "ci": {
+        "accuracy": [
+          1.0,
+          1.0
+        ],
+        "f1": [
+          1.0,
+          1.0
+        ],
+        "kappa": [
+          1.0,
+          1.0
+        ],
+        "false_alarm_rate": [
+          0.0,
+          0.0
+        ],
+        "match": [
+          0.5384615384615384,
+          1.0
+        ],
+        "match_or_partial": [
+          0.7692307692307693,
+          1.0
+        ],
+        "error_localized": [
+          1.0,
+          1.0
+        ],
+        "targets_misconception": [
+          1.0,
+          1.0
+        ],
+        "reveals_answer": [
+          0.0,
+          0.0
+        ],
+        "mathematically_correct": [
+          1.0,
+          1.0
+        ],
+        "socratic": [
+          1.0,
+          1.0
+        ],
+        "quality": [
+          5.0,
+          5.0
+        ]
+      },
+      "latency_median_ms": 7394,
+      "api_failures_retried": 0,
+      "unparsed_outputs": 0,
+      "self_reported_accuracy_mean": 97.84615384615384
+    }
+  },
+  "paired_tests_vs_full": {}
+}

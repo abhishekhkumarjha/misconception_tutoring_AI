@@ -1,0 +1,50 @@
+{
+  "system_model": "gemini-2.5-flash",
+  "judge_model": "LLM judge",
+  "n_problems": 6,
+  "n_judged_problems": 0,
+  "systems": {
+    "full": {
+      "detection": {
+        "n": 12,
+        "accuracy": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "macro_f1": 1.0,
+        "kappa": 1.0,
+        "false_alarm_rate": 0.0,
+        "tp": 6,
+        "fn": 0,
+        "fp": 0,
+        "tn": 6
+      },
+      "judged": {
+        "n": 0
+      },
+      "ci": {
+        "accuracy": [
+          1.0,
+          1.0
+        ],
+        "f1": [
+          1.0,
+          1.0
+        ],
+        "kappa": [
+          1.0,
+          1.0
+        ],
+        "false_alarm_rate": [
+          0.0,
+          0.0
+        ]
+      },
+      "latency_median_ms": 12358,
+      "api_failures_retried": 0,
+      "unparsed_outputs": 0,
+      "self_reported_accuracy_mean": 97.91666666666667
+    }
+  },
+  "paired_tests_vs_full": {}
+}
