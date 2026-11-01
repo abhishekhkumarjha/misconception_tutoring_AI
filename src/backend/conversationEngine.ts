@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
 export type StudentIntent =
   | 'hint_request'
@@ -561,6 +561,69 @@ export function generateLocalPedagogicalResponse(
   };
 }
 
+// Read at call time: server.ts loads .env after its imports have been evaluated.
+const tutorModel = () => process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+/**
+ * Deterministic final-answer check fed to the LLM, so a correct solution is not
+ * talked into a "misconception" by the retrieved RAG examples.
+ */
+export function checkFinalAnswer(studentMessage: string, targetSolution: string): string {
+  const lastNumber = (text: string) => {
+    const nums = (text || '').replace(/(\d),(?=\d{3}\b)/g, '$1').match(/-?(?:\d+(?:\.\d+)?|\.\d+)/g);
+    return nums ? parseFloat(nums[nums.length - 1]) : null;
+  };
+  const target = lastNumber(targetSolution);
+  const student = lastNumber(studentMessage);
+  if (target === null || student === null) return 'not applicable (no numeric answer to compare)';
+  if (Math.abs(target - student) < 1e-6) {
+    return `the student's final number (${student}) MATCHES the target answer. Treat the work as correct unless a step contains a clear mathematical error.`;
+  }
+  return `the student's final number (${student}) differs from the target answer. It may be an intermediate step; judge the step itself.`;
+}
+
+const TUTOR_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    message: { type: Type.STRING },
+    guidingQuestion: { type: Type.STRING },
+    encouragement: { type: Type.STRING },
+    diagnosis: {
+      type: Type.OBJECT,
+      properties: {
+        correctness: { type: Type.STRING, enum: ['correct', 'partial', 'incorrect', 'inquiry'] },
+        error_type: { type: Type.STRING },
+        misconception: { type: Type.STRING },
+        evidence: { type: Type.STRING },
+        confidence: { type: Type.NUMBER },
+        mistake_step: { type: Type.STRING, nullable: true },
+      },
+      required: ['correctness', 'error_type', 'misconception', 'evidence', 'confidence'],
+    },
+    pedagogy: {
+      type: Type.OBJECT,
+      properties: {
+        strategy: { type: Type.STRING },
+        talk_move: { type: Type.STRING },
+        hint_level: { type: Type.INTEGER },
+        pedagogical_goal: { type: Type.STRING },
+      },
+      required: ['strategy', 'talk_move', 'hint_level', 'pedagogical_goal'],
+    },
+    evaluation: {
+      type: Type.OBJECT,
+      properties: {
+        accuracy_score: { type: Type.INTEGER },
+        hint_quality: { type: Type.INTEGER },
+        pedagogical_score: { type: Type.INTEGER },
+        answer_revealed: { type: Type.BOOLEAN },
+      },
+      required: ['accuracy_score', 'hint_quality', 'pedagogical_score', 'answer_revealed'],
+    },
+  },
+  required: ['message', 'guidingQuestion', 'encouragement', 'diagnosis', 'pedagogy', 'evaluation'],
+};
+
 /**
  * Consolidated 1-Call Gemini Pipeline
  * Performs full diagnosis, pedagogy selection, and response generation in a SINGLE LLM inference.
@@ -590,6 +653,8 @@ export async function runConsolidatedTutorPipeline(
     .map((m: any) => `${m.sender}: ${m.text}`)
     .join('\n');
 
+  const answerCheck = checkFinalAnswer(studentMessage, targetSolution);
+
   const prompt = `You are OTTC Math Tutor, an expert, encouraging, misconception-aware mathematics tutor.
 You communicate warmly and conversationally, strictly adhering to Socratic discovery (do not give the final answer away prematurely).
 
@@ -605,6 +670,7 @@ Target Solution: ${targetSolution || 'Derive step-by-step'}
 STUDENT MESSAGE:
 "${studentMessage}"
 Detected Student Intent: ${intent.toUpperCase()}
+AUTOMATIC ANSWER CHECK: ${answerCheck}
 
 CONVERSATION HISTORY:
 ${historyText || '(Beginning of conversation)'}
@@ -618,8 +684,15 @@ ${ragContext}
 INSTRUCTIONS — Follow this exact reasoning chain:
 STEP 1 — DIAGNOSE: Is the student submitting a math step or asking a question?
   - If NON-MATH (hint/greeting/stuck): set correctness="inquiry", error_type="none", confidence=1.0
-  - If MATH STEP: carefully check against the target solution. Look at the RAG misconceptions above
-    to identify the exact misconception pattern. Set confidence based on clarity of evidence (0.7-1.0 if clear, 0.5-0.7 if ambiguous).
+  - If MATH STEP, decide correctness FIRST, from the student's own work only:
+    a) Re-check every step of the student's work yourself, using the target solution and the AUTOMATIC ANSWER CHECK.
+    b) "correct" = every step is valid and the student reached the target answer (wording or method may differ from yours).
+       "partial" = every step so far is valid but the student has not finished. "incorrect" = at least one step is wrong.
+    c) Do NOT invent errors. If the work is correct, set error_type="none" and misconception="none".
+    d) Only if the work is partial or incorrect: name the misconception as the specific faulty rule or belief
+       ("the student believes/does X instead of Y"), quote the step where it occurs in mistake_step, and quote that step as evidence.
+       Use a RAG misconception only if the student's work shows that exact pattern; otherwise ignore the RAG misconceptions.
+    Set confidence based on clarity of evidence (0.7-1.0 if clear, 0.5-0.7 if ambiguous).
 STEP 2 — SELECT PEDAGOGY: Choose the TalkMove that matches the student state and the RAG pedagogy patterns above.
   Do NOT reveal the answer. Guide toward discovery.
 STEP 3 — GENERATE RESPONSE: Write a warm, problem-specific tutor message grounded in the RAG context.
@@ -656,10 +729,11 @@ Return ONLY valid JSON with keys:
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: tutorModel(),
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
+        responseSchema: TUTOR_RESPONSE_SCHEMA,
       },
     });
 
