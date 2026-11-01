@@ -18,10 +18,11 @@ from scipy.stats import binomtest, wilcoxon
 SYSTEM_NAMES = {
     "full": "Full system (RAG + TalkMoves)",
     "full_v1": "Full system, original prompt (v1)",
+    "full_v2": "Full system, v2 prompt",
     "norag": "w/o RAG (ablation)",
     "baseline": "Generic tutor baseline",
 }
-ORDER = ["full", "full_v1", "norag", "baseline"]
+ORDER = ["full", "full_v2", "full_v1", "norag", "baseline"]
 
 
 def load_jsonl(path):

@@ -247,6 +247,7 @@ async function main() {
   console.log(`System model: ${SYSTEM_MODEL} | judge model: ${JUDGE_MODEL}`);
   const mirror = buildRagMirror();
   process.chdir(mirror); // rag.ts and conversationEngine.ts resolve data/ from cwd
+  process.env.GEMINI_MODEL = SYSTEM_MODEL; // the engine picks its model (and thinking settings) from this
 
   const rag = await import(pathToFileURL(path.join(ROOT, 'src/backend/rag.ts')).href);
   const engine = await import(pathToFileURL(path.join(ROOT, 'src/backend/conversationEngine.ts')).href);

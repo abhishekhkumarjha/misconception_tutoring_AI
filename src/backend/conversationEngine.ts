@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 
 export type StudentIntent =
   | 'hint_request'
@@ -622,6 +622,16 @@ const TUTOR_RESPONSE_SCHEMA = {
     },
   },
   required: ['message', 'guidingQuestion', 'encouragement', 'diagnosis', 'pedagogy', 'evaluation'],
+  // Generate the diagnosis before the reply, so the reply is written from it.
+  propertyOrdering: ['diagnosis', 'pedagogy', 'message', 'guidingQuestion', 'encouragement', 'evaluation'],
+};
+
+// Gemini 3 models answer without reasoning unless a thinking level is set; diagnosis needs it.
+// Gemini 2.5 models think by default and reject thinkingLevel, so it is only set for gemini-3*.
+const thinkingConfig = (model: string) => {
+  if (!model.startsWith('gemini-3')) return {};
+  const level = (process.env.GEMINI_THINKING_LEVEL || 'HIGH').toUpperCase() as ThinkingLevel;
+  return { thinkingConfig: { thinkingLevel: level } };
 };
 
 /**
@@ -685,18 +695,24 @@ INSTRUCTIONS — Follow this exact reasoning chain:
 STEP 1 — DIAGNOSE: Is the student submitting a math step or asking a question?
   - If NON-MATH (hint/greeting/stuck): set correctness="inquiry", error_type="none", confidence=1.0
   - If MATH STEP, decide correctness FIRST, from the student's own work only:
-    a) Re-check every step of the student's work yourself, using the target solution and the AUTOMATIC ANSWER CHECK.
+    a) Solve the problem yourself first and note the correct value of every intermediate quantity. Then compare the
+       student's lines with your solution one by one, using the target solution and the AUTOMATIC ANSWER CHECK.
     b) "correct" = every step is valid and the student reached the target answer (wording or method may differ from yours).
        "partial" = every step so far is valid but the student has not finished. "incorrect" = at least one step is wrong.
     c) Do NOT invent errors. If the work is correct, set error_type="none" and misconception="none".
-    d) Only if the work is partial or incorrect: name the misconception as the specific faulty rule or belief
-       ("the student believes/does X instead of Y"), quote the step where it occurs in mistake_step, and quote that step as evidence.
+    d) Only if the work is partial or incorrect: find the FIRST line where the student's setup or value departs from a
+       correct solution (later errors usually follow from it). In misconception, explain WHY the student wrote that line:
+       the faulty rule, belief or misreading of the problem ("the student believes/does X instead of Y"). If it is only a
+       slip (a typo or arithmetic slip), say so. Copy that line word for word into mistake_step and evidence.
        Use a RAG misconception only if the student's work shows that exact pattern; otherwise ignore the RAG misconceptions.
+    e) VERIFY before answering: find mistake_step in the student's message. It must appear there and must actually contain
+       the error you describe; never claim the student left out something they wrote. If the check fails, redo d).
     Set confidence based on clarity of evidence (0.7-1.0 if clear, 0.5-0.7 if ambiguous).
 STEP 2 — SELECT PEDAGOGY: Choose the TalkMove that matches the student state and the RAG pedagogy patterns above.
   Do NOT reveal the answer. Guide toward discovery.
 STEP 3 — GENERATE RESPONSE: Write a warm, problem-specific tutor message grounded in the RAG context.
   Match complexity to the PROBLEM LEVEL. Cite the specific step or number from the student's attempt.
+  If the work is partial or incorrect, aim the message and guiding question at the error in your diagnosis.
 STEP 4 — EVALUATE: Score accuracy, hint quality, and pedagogical effectiveness (1-100).
   If you are giving away the answer, set answer_revealed=true and penalise hint_quality.
 
@@ -734,6 +750,7 @@ Return ONLY valid JSON with keys:
       config: {
         responseMimeType: 'application/json',
         responseSchema: TUTOR_RESPONSE_SCHEMA,
+        ...thinkingConfig(tutorModel()),
       },
     });
 
