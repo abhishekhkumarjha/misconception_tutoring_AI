@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, CheckCircle, HelpCircle, FileText, BarChart2, ShieldCheck, Database, Layers, Zap } from 'lucide-react';
+import { X, CheckCircle, AlertTriangle, HelpCircle, FileText, BarChart2, ShieldCheck, Database, Layers, Zap } from 'lucide-react';
 import { MathProblem, ChatMessage, EvaluationMetrics } from '../types';
 
 interface ArchitecturePanelProps {
@@ -46,6 +46,8 @@ export const ArchitecturePanel: React.FC<ArchitecturePanelProps> = ({
         </div>
         <button
           onClick={onClose}
+          aria-label="Close architecture panel"
+          title="Close"
           className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
@@ -92,10 +94,17 @@ export const ArchitecturePanel: React.FC<ArchitecturePanelProps> = ({
 
             <div className="bg-slate-950/60 p-2.5 rounded-xl border border-white/10">
               <div className="text-[11px] text-slate-400">Answer Concealment Rule</div>
-              <div className="text-xs font-bold text-emerald-400 flex items-center gap-1 mt-1">
-                <CheckCircle className="w-3.5 h-3.5" />
-                <span>Enforced (No leaks)</span>
-              </div>
+              {latestTutorMessage?.pedagogical?.answerRevealed || evaluation.socraticRuleAdhered === false ? (
+                <div className="text-xs font-bold text-amber-400 flex items-center gap-1 mt-1">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Answer revealed in last reply</span>
+                </div>
+              ) : (
+                <div className="text-xs font-bold text-emerald-400 flex items-center gap-1 mt-1">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>Enforced (No leaks)</span>
+                </div>
+              )}
             </div>
           </div>
         </section>

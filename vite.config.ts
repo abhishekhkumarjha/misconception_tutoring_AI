@@ -8,12 +8,16 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       },
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // The server rewrites data/rag/embeddings_cache.json on every chat request; watching data/
+      // made Tailwind send a full page reload each time, wiping the conversation.
+      watch: process.env.DISABLE_HMR === 'true'
+        ? null
+        : { ignored: ['**/data/**', '**/python_service/**', '**/dist/**', '**/*.pdf', '**/*.txt'] },
     },
   };
 });

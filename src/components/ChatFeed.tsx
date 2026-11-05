@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, User, HelpCircle, CheckCircle, ChevronDown, ChevronUp, Cpu, Sparkles, Terminal, ShieldCheck, Search } from 'lucide-react';
+import { Bot, User, HelpCircle, CheckCircle, AlertTriangle, ChevronDown, ChevronUp, Cpu, Sparkles, Terminal, ShieldCheck, Search } from 'lucide-react';
 import { ChatMessage } from '../types';
 
 interface ChatFeedProps {
@@ -113,7 +113,7 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({ messages, isLoading }) => {
         }
 
         // Tutor Message
-        const isPythonTutor = message.analysis?.trace || message.text.includes('Python') || message.analysis?.candidatesConsidered;
+        const isPythonTutor = message.analysis?.trace || message.text?.includes('Python') || message.analysis?.candidatesConsidered;
 
         return (
           <div
@@ -134,7 +134,7 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({ messages, isLoading }) => {
                 {message.analysis && getErrorBadge(message.analysis.errorType, message.analysis.errorSummary)}
                 {message.pedagogical && (
                   <span className="text-[10px] font-medium text-indigo-300 bg-indigo-500/15 px-2 py-0.5 rounded-full border border-indigo-500/30 capitalize">
-                    {message.pedagogical.talkMove ? `<${message.pedagogical.talkMove}>` : message.pedagogical.strategy.toLowerCase().replace(/_/g, ' ')}
+                    {message.pedagogical.talkMove ? `<${message.pedagogical.talkMove}>` : (message.pedagogical.strategy ?? '').toLowerCase().replace(/_/g, ' ')}
                   </span>
                 )}
               </div>
@@ -247,10 +247,17 @@ export const ChatFeed: React.FC<ChatFeedProps> = ({ messages, isLoading }) => {
                           <p className="text-slate-300 text-[11px]">
                             <strong>Educational Goal:</strong> {message.pedagogical.pedagogicalGoal}
                           </p>
-                          <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
-                            <CheckCircle className="w-3 h-3 text-emerald-400" />
-                            <span>Socratic Rule Adhered: Complete solution kept concealed to prompt self-discovery</span>
-                          </div>
+                          {message.pedagogical.answerRevealed || message.evaluation?.socraticRuleAdhered === false ? (
+                            <div className="flex items-center gap-1.5 text-[11px] text-amber-400 font-medium">
+                              <AlertTriangle className="w-3 h-3 text-amber-400" />
+                              <span>Answer revealed in this reply</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
+                              <CheckCircle className="w-3 h-3 text-emerald-400" />
+                              <span>Socratic Rule Adhered: Complete solution kept concealed to prompt self-discovery</span>
+                            </div>
+                          )}
                         </div>
                       )}
 

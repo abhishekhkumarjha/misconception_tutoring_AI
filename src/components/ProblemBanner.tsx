@@ -6,6 +6,8 @@ interface ProblemBannerProps {
   problem: MathProblem;
   isSolved: boolean;
   onTryExample: (attemptText: string) => void;
+  /** Put code into the chat input for editing, without sending it. */
+  onLoadCode?: (code: string) => void;
   attemptsCount: number;
   onOpenCustomProblem?: () => void;
 }
@@ -14,6 +16,7 @@ export const ProblemBanner: React.FC<ProblemBannerProps> = ({
   problem,
   isSolved,
   onTryExample,
+  onLoadCode,
   attemptsCount,
   onOpenCustomProblem,
 }) => {
@@ -176,7 +179,7 @@ export const ProblemBanner: React.FC<ProblemBannerProps> = ({
               <Terminal className="w-3.5 h-3.5" /> Starter Python Code
             </span>
             <button
-              onClick={() => onTryExample(problem.starterCode || '')}
+              onClick={() => (onLoadCode ?? onTryExample)(problem.starterCode || '')}
               className="text-cyan-300 hover:text-cyan-200 underline cursor-pointer text-[11px]"
             >
               Load Code into Chat

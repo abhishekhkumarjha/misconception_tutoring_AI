@@ -22,13 +22,27 @@ export const CustomProblemModal: React.FC<CustomProblemModalProps> = ({
   const [expectedOutput, setExpectedOutput] = useState('');
   const [topic, setTopic] = useState<MathTopic>('Algebra');
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('Medium');
-  const [hintsText, setHintsText] = useState('');
 
   useEffect(() => {
     if (defaultSubject) setSubject(defaultSubject);
   }, [defaultSubject, isOpen]);
 
+  // Keep the topic consistent with the options the dropdown shows for this subject.
+  useEffect(() => {
+    setTopic(subject === 'python' || subject === 'cross_domain' ? 'Loops & Iteration' : 'Algebra');
+  }, [subject]);
+
   if (!isOpen) return null;
+
+  const isPy = subject === 'python' || subject === 'cross_domain';
+
+  const resetForm = () => {
+    setProblemText('');
+    setTargetSolution('');
+    setStarterCode('');
+    setExpectedOutput('');
+    setDifficulty('Medium');
+  };
 
   const mathTemplates = [
     {
@@ -108,8 +122,9 @@ export const CustomProblemModal: React.FC<CustomProblemModalProps> = ({
       subjectType: subject,
       problem: trimmedProblem,
       targetSolution: finalSolution,
-      starterCode: starterCode.trim() || undefined,
-      expectedOutput: expectedOutput.trim() || undefined,
+      // Python fields stay hidden but filled after switching to Math; only keep them for code problems.
+      starterCode: isPy ? starterCode.trim() || undefined : undefined,
+      expectedOutput: isPy ? expectedOutput.trim() || undefined : undefined,
       source: 'custom',
       stepByStepSolution: [
         'Analyze the problem specification and constraints',
@@ -118,22 +133,19 @@ export const CustomProblemModal: React.FC<CustomProblemModalProps> = ({
           : 'Apply mathematical operations and inverse rules step-by-step',
         'Verify against test cases and execution output',
       ],
-      hints: hintsText.trim()
-        ? hintsText.split('\n').map((h) => h.trim()).filter(Boolean)
-        : [
-            'Break down the problem into smaller, individual operations.',
-            subject === 'python'
-              ? 'Think about edge cases, variable state, and loop termination.'
-              : 'What is the very first quantity or variable you can isolate?',
-            'Test your reasoning against a concrete input value.',
-          ],
+      hints: [
+        'Break down the problem into smaller, individual operations.',
+        isPy
+          ? 'Think about edge cases, variable state, and loop termination.'
+          : 'What is the very first quantity or variable you can isolate?',
+        'Test your reasoning against a concrete input value.',
+      ],
     };
 
     onAddProblem(newProblem);
+    resetForm();
     onClose();
   };
-
-  const isPy = subject === 'python' || subject === 'cross_domain';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
@@ -153,6 +165,8 @@ export const CustomProblemModal: React.FC<CustomProblemModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close custom problem dialog"
+            title="Close"
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />

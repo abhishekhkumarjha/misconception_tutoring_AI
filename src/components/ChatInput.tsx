@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send, CornerDownLeft, Sparkles, Lightbulb, Code, Calculator } from 'lucide-react';
 import { SubjectType } from '../types';
 
@@ -7,19 +7,31 @@ interface ChatInputProps {
   isLoading: boolean;
   disabled?: boolean;
   subjectType?: SubjectType;
+  /** Text to place in the input without sending; a new nonce re-applies the same text. */
+  prefill?: { text: string; nonce: number } | null;
 }
+
+// Matches the server's limit, so a long paste is cut here instead of failing on send.
+const MAX_ATTEMPT_CHARS = 8000;
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
   isLoading,
   disabled = false,
   subjectType = 'math',
+  prefill = null,
 }) => {
   const [input, setInput] = useState('');
   const [isStepByStep, setIsStepByStep] = useState(true);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const isPython = subjectType === 'python' || subjectType === 'cross_domain';
+
+  useEffect(() => {
+    if (!prefill) return;
+    setInput(prefill.text.slice(0, MAX_ATTEMPT_CHARS));
+    inputRef.current?.focus();
+  }, [prefill?.nonce]);
 
   const mathSymbols = ['+', '-', '×', '÷', '=', 'x', 'x²', '( )', '√', '±', '<', '>', '≤', '≥'];
   const pythonTokens = ['def ', 'for ', 'in range(', 'if ', 'else:', 'return ', 'print(', '[]', '==', '!=', '//', '%'];
@@ -33,12 +45,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (token === '( )') insertion = '()';
 
     const newValue = input.substring(0, start) + insertion + input.substring(end);
-    setInput(newValue);
+    setInput(newValue.slice(0, MAX_ATTEMPT_CHARS));
 
     setTimeout(() => {
       if (inputRef.current) {
         inputRef.current.focus();
-        const cursor = token.includes('(') && token.endsWith(')') ? start + token.length - 1 : start + insertion.length;
+        // Place the cursor inside the brackets of tokens like '()' or 'print('.
+        const cursor = insertion.endsWith(')') ? start + insertion.length - 1 : start + insertion.length;
         inputRef.current.setSelectionRange(cursor, cursor);
       }
     }, 10);
@@ -80,6 +93,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleQuickPrompt = (prompt: string) => {
+    if (isLoading || disabled) return;
     onSendMessage(prompt, isStepByStep);
   };
 
@@ -94,20 +108,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         {isPython ? (
           <>
             <button
+              disabled={isLoading || disabled}
               onClick={() => handleQuickPrompt("I'm not sure where to start. Can you guide me on the first step?")}
-              className="shrink-0 px-2.5 py-1 rounded-full bg-slate-900/60 hover:bg-emerald-950/60 text-slate-300 hover:text-emerald-200 border border-white/10 hover:border-emerald-400/40 transition-colors text-[11px] cursor-pointer"
+              className="shrink-0 px-2.5 py-1 rounded-full bg-slate-900/60 hover:bg-emerald-950/60 text-slate-300 hover:text-emerald-200 border border-white/10 hover:border-emerald-400/40 transition-colors text-[11px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Where to start?
             </button>
             <button
+              disabled={isLoading || disabled}
               onClick={() => handleQuickPrompt("Why does range() or my loop boundary produce unexpected output?")}
-              className="shrink-0 px-2.5 py-1 rounded-full bg-slate-900/60 hover:bg-emerald-950/60 text-slate-300 hover:text-emerald-200 border border-white/10 hover:border-emerald-400/40 transition-colors text-[11px] cursor-pointer"
+              className="shrink-0 px-2.5 py-1 rounded-full bg-slate-900/60 hover:bg-emerald-950/60 text-slate-300 hover:text-emerald-200 border border-white/10 hover:border-emerald-400/40 transition-colors text-[11px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Loop boundary hint
             </button>
             <button
+              disabled={isLoading || disabled}
               onClick={() => handleQuickPrompt("Can you trace this code step-by-step and show what is happening?")}
-              className="shrink-0 px-2.5 py-1 rounded-full bg-slate-900/60 hover:bg-emerald-950/60 text-slate-300 hover:text-emerald-200 border border-white/10 hover:border-emerald-400/40 transition-colors text-[11px] cursor-pointer"
+              className="shrink-0 px-2.5 py-1 rounded-full bg-slate-900/60 hover:bg-emerald-950/60 text-slate-300 hover:text-emerald-200 border border-white/10 hover:border-emerald-400/40 transition-colors text-[11px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Trace execution
             </button>
@@ -115,20 +132,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         ) : (
           <>
             <button
+              disabled={isLoading || disabled}
               onClick={() => handleQuickPrompt("I'm not sure where to start. Can you guide me on the first step?")}
-              className="shrink-0 px-2.5 py-1 rounded-full bg-slate-900/60 hover:bg-cyan-950/60 text-slate-300 hover:text-cyan-200 border border-white/10 hover:border-cyan-400/40 transition-colors text-[11px] cursor-pointer"
+              className="shrink-0 px-2.5 py-1 rounded-full bg-slate-900/60 hover:bg-cyan-950/60 text-slate-300 hover:text-cyan-200 border border-white/10 hover:border-cyan-400/40 transition-colors text-[11px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Where to start?
             </button>
             <button
+              disabled={isLoading || disabled}
               onClick={() => handleQuickPrompt("Can you give me a subtle hint for this step?")}
-              className="shrink-0 px-2.5 py-1 rounded-full bg-slate-900/60 hover:bg-cyan-950/60 text-slate-300 hover:text-cyan-200 border border-white/10 hover:border-cyan-400/40 transition-colors text-[11px] cursor-pointer"
+              className="shrink-0 px-2.5 py-1 rounded-full bg-slate-900/60 hover:bg-cyan-950/60 text-slate-300 hover:text-cyan-200 border border-white/10 hover:border-cyan-400/40 transition-colors text-[11px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Need a hint
             </button>
             <button
+              disabled={isLoading || disabled}
               onClick={() => handleQuickPrompt("Can you explain the mathematical rule being used here?")}
-              className="shrink-0 px-2.5 py-1 rounded-full bg-slate-900/60 hover:bg-cyan-950/60 text-slate-300 hover:text-cyan-200 border border-white/10 hover:border-cyan-400/40 transition-colors text-[11px] cursor-pointer"
+              className="shrink-0 px-2.5 py-1 rounded-full bg-slate-900/60 hover:bg-cyan-950/60 text-slate-300 hover:text-cyan-200 border border-white/10 hover:border-cyan-400/40 transition-colors text-[11px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Explain the rule
             </button>
@@ -194,6 +214,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               : "Type your final answer (e.g. 'x = 5')..."
           }
           rows={isPython ? 3 : 2}
+          maxLength={MAX_ATTEMPT_CHARS}
+          aria-label="Your answer or question"
           disabled={disabled || isLoading}
           className="flex-1 bg-transparent resize-none outline-none text-sm text-slate-100 placeholder-slate-500 font-mono px-2 py-1 leading-relaxed"
         />

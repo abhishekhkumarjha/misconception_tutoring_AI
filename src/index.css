@@ -1,1 +1,4 @@
 @import "tailwindcss";
+/* Datasets and the Python service hold no class names; scanning them slows builds and triggers reloads. */
+@source not "../data";
+@source not "../python_service";

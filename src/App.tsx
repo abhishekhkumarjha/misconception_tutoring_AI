@@ -22,10 +22,17 @@ export default function App() {
   const [isSolved, setIsSolved] = useState(false);
   const [attemptsCount, setAttemptsCount] = useState(0);
 
+  // Text to place in the chat input without sending it (e.g. starter code); nonce re-triggers same text.
+  const [inputPrefill, setInputPrefill] = useState<{ text: string; nonce: number } | null>(null);
+
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  // Bumped whenever the chat is reset, so a reply to an abandoned problem is discarded.
+  const chatSessionRef = useRef(0);
 
   // Initialize welcoming chat message tailored to subject and problem
   const initProblemChat = (problem: MathProblem) => {
+    chatSessionRef.current += 1;
+    setIsLoading(false);
     setIsSolved(false);
     setAttemptsCount(0);
     const sub = problem.subjectType || activeSubject;
@@ -80,6 +87,7 @@ export default function App() {
   }, [messages, isLoading]);
 
   const handleSelectSubject = (subject: SubjectType) => {
+    if (subject === activeSubject) return;
     setActiveSubject(subject);
     const subjectProblems = getProblemsBySubject(subject);
     if (subjectProblems.length > 0) {
@@ -107,7 +115,8 @@ export default function App() {
   };
 
   const handleSendStudentAttempt = async (attemptText: string, isStepByStep: boolean) => {
-    if (!attemptText.trim() || isLoading) return;
+    if (!attemptText.trim() || isLoading || isSolved) return;
+    const session = chatSessionRef.current;
 
     const studentMessage: ChatMessage = {
       id: `student-${Date.now()}`,
@@ -140,10 +149,15 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`Server returned HTTP ${response.status}`);
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.error || `Server returned HTTP ${response.status}`);
       }
 
       const tutorResp: TutorResponse = await response.json();
+      if (session !== chatSessionRef.current) return; // the student moved on to another problem
+      if (!tutorResp?.message) {
+        throw new Error('Tutor response had no message');
+      }
 
       if (tutorResp.analysis?.isCorrect && tutorResp.analysis?.isFinalAnswer) {
         setIsSolved(true);
@@ -161,35 +175,21 @@ export default function App() {
 
       setMessages((prev) => [...prev, tutorMessage]);
     } catch (error) {
+      if (session !== chatSessionRef.current) return;
       console.error('Error communicating with tutor backend:', error);
-      // Friendly fallback message if server is temporarily unreachable
-      const isPy = activeSub === 'python' || activeSub === 'cross_domain';
+      // Say plainly that the request failed instead of inventing a tutor reply; the attempt does not count.
+      setAttemptsCount((prev) => Math.max(0, prev - 1));
       setMessages((prev) => [
         ...prev,
         {
-          id: `tutor-fallback-${Date.now()}`,
-          sender: 'tutor',
-          text: isPy
-            ? `Great coding attempt! Let's examine your logic line by line. What sequence of values is being generated or evaluated during the first iteration?`
-            : `Great attempt! Let's examine your equation steps closely. What is the inverse operation needed to eliminate the constant term on the variable side?`,
+          id: `system-error-${Date.now()}`,
+          sender: 'system',
+          text: `I couldn't get a reply from the tutor (${error instanceof Error ? error.message : 'network error'}). Please check your connection and send your answer again.`,
           timestamp: Date.now(),
-          pedagogical: {
-            strategy: 'guided_discovery',
-            hintLevel: 1,
-            answerRevealed: false,
-            pedagogicalGoal: isPy ? 'Guide student toward tracing code execution.' : 'Guide student toward inverse operations.',
-            nextRecommendedPrompt: isPy ? 'Try writing down the values after each loop iteration.' : 'Try applying the inverse operation to both sides of the equation.',
-          },
-          evaluation: {
-            errorDetectionAccuracy: 90,
-            hintQualityScore: 88,
-            pedagogicalEffectiveness: 88,
-            socraticRuleAdhered: true,
-          },
         },
       ]);
     } finally {
-      setIsLoading(false);
+      if (session === chatSessionRef.current) setIsLoading(false);
     }
   };
 
@@ -225,6 +225,7 @@ export default function App() {
             problem={currentProblem}
             isSolved={isSolved}
             onTryExample={(ex) => handleSendStudentAttempt(ex, false)}
+            onLoadCode={(code) => setInputPrefill({ text: code, nonce: Date.now() })}
             attemptsCount={attemptsCount}
             onOpenCustomProblem={() => setIsCustomModalOpen(true)}
           />
@@ -266,6 +267,7 @@ export default function App() {
               isLoading={isLoading}
               disabled={isSolved}
               subjectType={currentProblem.subjectType || activeSubject}
+              prefill={inputPrefill}
             />
           </div>
         </main>

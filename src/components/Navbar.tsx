@@ -37,6 +37,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           className={`flex items-center gap-2.5 ${onOpenOverview ? 'cursor-pointer group' : ''}`}
           onClick={onOpenOverview}
           title={onOpenOverview ? 'Click to view UniTutor AI Architecture & Datasets' : undefined}
+          role={onOpenOverview ? 'button' : undefined}
+          tabIndex={onOpenOverview ? 0 : undefined}
+          aria-label={onOpenOverview ? 'Open overview' : undefined}
+          onKeyDown={(e) => {
+            if (onOpenOverview && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              onOpenOverview();
+            }
+          }}
         >
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-cyan-500/25 border border-white/15 group-hover:scale-105 transition-transform">
             <Bot className="w-5 h-5" />
