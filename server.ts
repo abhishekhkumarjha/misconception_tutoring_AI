@@ -46,7 +46,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     hasApiKey: Boolean(process.env.GEMINI_API_KEY),
-    model: 'gemini-2.5-flash + RAG (55k records + 22k Dialogue Pairs + TalkMoves)',
+    model: `${process.env.GEMINI_MODEL || 'gemini-2.5-flash'} + RAG (55k records + 22k Dialogue Pairs + TalkMoves)`,
   });
 });
 
@@ -94,17 +94,40 @@ app.post('/api/python/run', async (req: Request, res: Response) => {
   }
 });
 
+const MAX_ATTEMPT_CHARS = 8000;
+
+// Code-like answers to cross-domain problems go to the Python pipeline; "x = 5" or "for the first step" stay math.
+function looksLikePythonCode(text: string): boolean {
+  return (
+    /^\s*(def|class|while|if|elif|else|for|try|except|with)\b[^\n]*:\s*$/m.test(text) || // block header ending in ':'
+    /^\s*(import\s+\w|from\s+[\w.]+\s+import\b)/m.test(text) ||
+    /\bprint\s*\(/.test(text)
+  );
+}
+
 // POST /api/chat - Unified Multi-Subject Socratic Tutoring Pipeline
 app.post('/api/chat', async (req: Request, res: Response) => {
   const startTime = Date.now();
+  // Validate before the try block so the error fallback below never sees malformed input.
+  const body = req.body ?? {};
+  const problem = body.problem;
+  const studentAttempt = typeof body.studentAttempt === 'string' ? body.studentAttempt.trim() : '';
+  const subject = typeof body.subject === 'string' ? body.subject : undefined;
+  const history = Array.isArray(body.history)
+    ? body.history.filter((m: any) => m && typeof m.text === 'string' && typeof m.sender === 'string')
+    : [];
+  const problemIsValid = (typeof problem === 'string' && problem.trim() !== '') || (problem && typeof problem === 'object');
+
+  if (!problemIsValid || !studentAttempt) {
+    res.status(400).json({ error: 'Request needs a problem (string or object) and a non-empty studentAttempt string.' });
+    return;
+  }
+  if (studentAttempt.length > MAX_ATTEMPT_CHARS) {
+    res.status(413).json({ error: `studentAttempt is longer than ${MAX_ATTEMPT_CHARS} characters.` });
+    return;
+  }
+
   try {
-    const { problem, studentAttempt, isStepByStep = true, history = [], subject } = req.body;
-
-    if (!problem || !studentAttempt) {
-      res.status(400).json({ error: 'Missing problem or studentAttempt in request body.' });
-      return;
-    }
-
     const determinedSubject =
       subject ||
       (typeof problem === 'object' && problem.subjectType) ||
@@ -117,7 +140,7 @@ app.post('/api/chat', async (req: Request, res: Response) => {
     let result;
 
     // ── PYTHON & CROSS-DOMAIN PIPELINE (Enhanced MisconAI Model) ──
-    if (determinedSubject === 'python' || (determinedSubject === 'cross_domain' && (studentAttempt.includes('def ') || studentAttempt.includes('for ') || studentAttempt.includes('return') || studentAttempt.includes('print(') || studentAttempt.includes('=')))) {
+    if (determinedSubject === 'python' || (determinedSubject === 'cross_domain' && looksLikePythonCode(studentAttempt))) {
       const problemTitle = typeof problem === 'object' ? problem.title || baseProblemText : 'Python Problem';
       const expectedOutput = typeof problem === 'object' ? problem.expectedOutput || '' : '';
 
@@ -160,14 +183,15 @@ app.post('/api/chat', async (req: Request, res: Response) => {
     res.json(result);
   } catch (error) {
     console.error('Error handling /api/chat:', error);
-    const intent = classifyStudentIntent(req.body?.studentAttempt || '');
-    const fallback = generateLocalPedagogicalResponse(
-      typeof req.body?.problem === 'string' ? req.body.problem : req.body?.problem?.problem || '',
-      req.body?.studentAttempt || '',
-      intent,
-      req.body?.history || []
-    );
-    res.json({ id: `resp-${Date.now()}`, ...fallback });
+    try {
+      const problemText = typeof problem === 'string' ? problem : String(problem.problem || problem.title || '');
+      const fallback = generateLocalPedagogicalResponse(problemText, studentAttempt, classifyStudentIntent(studentAttempt), history);
+      res.json({ id: `resp-${Date.now()}`, ...fallback });
+    } catch (fallbackError) {
+      // A throw here would be an unhandled rejection and take the whole server down.
+      console.error('Local fallback also failed:', fallbackError);
+      if (!res.headersSent) res.status(500).json({ error: 'The tutor could not process this message.' });
+    }
   }
 });
 
@@ -193,8 +217,10 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Math Tutor Chatbot Server running on http://0.0.0.0:${PORT}`);
+  // localhost by default: the Python track runs student code. Set HOST=0.0.0.0 to serve your network.
+  const host = process.env.HOST || '127.0.0.1';
+  app.listen(PORT, host, () => {
+    console.log(`Math Tutor Chatbot Server running on http://${host === '0.0.0.0' ? 'localhost' : host}:${PORT}`);
   });
 }
 

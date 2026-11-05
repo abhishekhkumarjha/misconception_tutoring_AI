@@ -229,7 +229,7 @@ def analyze_python_submission(
         try:
             import google.generativeai as gai
             gai.configure(api_key=api_key)
-            model = gai.GenerativeModel("gemini-2.5-flash")
+            model = gai.GenerativeModel(os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
             llm_response = model.generate_content(prompt)
             if llm_response and llm_response.text:
                 mining_result = parse_mining_response(llm_response.text)
@@ -252,7 +252,9 @@ def analyze_python_submission(
                     "description": "Code is correct",
                     "explanation": "No misconception exhibited.",
                 }
-            elif matched_misc:
+            # Only blame a misconception when the output is known to be wrong; without an expected
+            # output, the nearest taxonomy entry is a guess and would flag correct code.
+            elif matched_misc and expected_output and expected_output.strip() != actual_output:
                 mining_result = {
                     "trace": f"Executed code: produced output '{actual_output}'.",
                     "verification": f"Exhibits construct pattern matching taxonomy candidate #{matched_misc['id']}.",
@@ -281,6 +283,9 @@ def analyze_python_submission(
     # Step 5: Formulate Final Socratic Response & Metrics
     has_misconception = mining_result.get("misconception_found", False)
     is_correct = not has_misconception and (not runtime_error)
+    if runtime_error and not has_misconception:
+        # The LLM may judge the logic sound while the run timed out or crashed; report what actually happened.
+        mining_result["description"] = f"The code did not run to completion: {runtime_error}"
 
     socratic = generate_socratic_guidance(
         problem_title,
@@ -301,7 +306,7 @@ def analyze_python_submission(
             "errorType": "conceptual_misconception" if has_misconception else ("runtime_error" if runtime_error else "none"),
             "errorSummary": mining_result.get("description", "Code reviewed."),
             "studentRationale": mining_result.get("explanation", "Parsed from student code submission."),
-            "severity": "minor" if is_correct else "moderate",
+            "severity": "none" if is_correct else "moderate",
             "trace": mining_result.get("trace", "Execution trace evaluated."),
             "verification": mining_result.get("verification", "Correctness verified."),
             "misconceptionFound": has_misconception,

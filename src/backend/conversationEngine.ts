@@ -418,19 +418,23 @@ export function generateLocalPedagogicalResponse(
   // Math step attempt analysis
   if (mathInfo.type === 'linear_equation') {
     const cleanAttempt = mLower.replace(/\s+/g, '');
+    const step1Words = mathInfo.step1Operation.replace(/\s+/g, ''); // e.g. "subtract5" or "add4"
     const isStep1Correct =
-      cleanAttempt.includes(mathInfo.step1Expected.replace(/\s+/g, '')) ||
-      cleanAttempt.includes(`subtract${mathInfo.constant}`) ||
-      cleanAttempt.includes(`-5`) ||
-      cleanAttempt.includes(`2x=10`);
+      cleanAttempt.includes(mathInfo.step1Expected.replace(/\s+/g, '').toLowerCase()) ||
+      cleanAttempt.includes(step1Words);
 
+    const finalStatement = `${mathInfo.variable}=${mathInfo.finalAnswer}`.toLowerCase();
+    // "...so x = 5" ends with the final statement; "2x = 5" or "x = -5" do not count.
+    const spacedAttempt = mLower.replace(/\s*=\s*/g, '=').replace(/[.!]+$/, '');
+    const charBeforeFinal = spacedAttempt.charAt(spacedAttempt.length - finalStatement.length - 1);
     const isFinalCorrect =
-      cleanAttempt === `${mathInfo.variable}=${mathInfo.finalAnswer}` ||
-      cleanAttempt === `${mathInfo.finalAnswer}`;
+      cleanAttempt === `${mathInfo.finalAnswer}` ||
+      (spacedAttempt.endsWith(finalStatement) && !/[0-9a-z.\-]/.test(charBeforeFinal));
 
     // Common misconception: added instead of subtracted (e.g. 2x = 20)
     const signErrorStep = `${mathInfo.coeff !== 1 ? mathInfo.coeff : ''}${mathInfo.variable}=${mathInfo.rhs + mathInfo.constant}`;
-    const hasSignError = cleanAttempt.includes(signErrorStep.replace(/\s+/g, ''));
+    const hasSignError = cleanAttempt.includes(signErrorStep.replace(/\s+/g, '').toLowerCase());
+    const constantTerm = mathInfo.constant >= 0 ? `+ ${mathInfo.constant}` : `- ${Math.abs(mathInfo.constant)}`;
 
     if (isFinalCorrect) {
       return {
@@ -466,7 +470,7 @@ export function generateLocalPedagogicalResponse(
 
     if (isStep1Correct) {
       return {
-        message: `Exactly right! By subtracting ${mathInfo.constant} from both sides, you simplified it to ${mathInfo.step1Expected}. Now we have ${mathInfo.coeff}${mathInfo.variable} = ${mathInfo.rhs - mathInfo.constant}.`,
+        message: `Exactly right! When you ${mathInfo.step1Operation} on both sides, the equation simplifies to ${mathInfo.step1Expected}.`,
         guidingQuestion: `How do we undo the multiplication by ${mathInfo.coeff} to get ${mathInfo.variable} alone?`,
         encouragement: "You're halfway there—great job on the first step!",
         analysis: {
@@ -498,7 +502,7 @@ export function generateLocalPedagogicalResponse(
 
     if (hasSignError) {
       return {
-        message: `You're working on the right term! But take a close look at the sign: we have + ${mathInfo.constant}. Remember that to move a term across the equals sign, we must use its inverse.`,
+        message: `You're working on the right term! But take a close look at the sign: we have ${constantTerm}. Remember that to move a term across the equals sign, we must use its inverse.`,
         guidingQuestion: `If the equation has + ${mathInfo.constant}, should we add or subtract ${mathInfo.constant} from both sides?`,
         encouragement: "Very close! Just watch that inverse operation sign.",
         analysis: {
@@ -563,6 +567,11 @@ export function generateLocalPedagogicalResponse(
 
 // Read at call time: server.ts loads .env after its imports have been evaluated.
 const tutorModel = () => process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+// Second model tried when the main one is overloaded; set GEMINI_FALLBACK_MODEL="" to disable.
+const fallbackTutorModel = () => {
+  const model = process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-3.1-flash-lite';
+  return model && model !== tutorModel() ? model : '';
+};
 
 /**
  * Deterministic final-answer check fed to the LLM, so a correct solution is not
@@ -625,6 +634,19 @@ const TUTOR_RESPONSE_SCHEMA = {
   // Generate the diagnosis before the reply, so the reply is written from it.
   propertyOrdering: ['diagnosis', 'pedagogy', 'message', 'guidingQuestion', 'encouragement', 'evaluation'],
 };
+
+// Gemini regularly returns 503 "high demand" for a few seconds; retry briefly before the canned fallback.
+async function withTransientRetry<T>(call: () => Promise<T>, delaysMs = [1500, 4000]): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await call();
+    } catch (error: any) {
+      const transient = /503|UNAVAILABLE|high demand|overloaded|429|RESOURCE_EXHAUSTED/i.test(String(error?.message || error));
+      if (!transient || attempt >= delaysMs.length) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delaysMs[attempt]));
+    }
+  }
+}
 
 // Gemini 3 models answer without reasoning unless a thinking level is set; diagnosis needs it.
 // Gemini 2.5 models think by default and reject thinkingLevel, so it is only set for gemini-3*.
@@ -744,31 +766,42 @@ Return ONLY valid JSON with keys:
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: tutorModel(),
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: TUTOR_RESPONSE_SCHEMA,
-        ...thinkingConfig(tutorModel()),
-      },
+    const request = (model: string) =>
+      ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: TUTOR_RESPONSE_SCHEMA,
+          ...thinkingConfig(model),
+        },
+      });
+    const response = await withTransientRetry(() => request(tutorModel())).catch((error) => {
+      // Overload spikes are per model; one try on a second model before the canned fallback.
+      const fallbackModel = fallbackTutorModel();
+      if (!fallbackModel || !/503|UNAVAILABLE|high demand|overloaded/i.test(String(error?.message || error))) throw error;
+      return request(fallbackModel);
     });
 
     if (response.text) {
       const parsed = JSON.parse(response.text);
+      const correctness = parsed.diagnosis.correctness;
+      // "partial" means every step so far is valid but unfinished, so it is not an error.
+      const noError = ['correct', 'partial', 'inquiry'].includes(correctness);
       return {
         id: `resp-${Date.now()}`,
         message: parsed.message,
         guidingQuestion: parsed.guidingQuestion,
         encouragement: parsed.encouragement || "Keep going, you're doing great!",
         analysis: {
-          isCorrect: parsed.diagnosis.correctness === 'correct' || parsed.diagnosis.correctness === 'inquiry',
-          isFinalAnswer: parsed.diagnosis.correctness === 'correct' && parsed.pedagogy?.hint_level === 3,
+          isCorrect: noError,
+          // Solved = judged correct and the final number matches the target (or there is no number to check).
+          isFinalAnswer: correctness === 'correct' && !answerCheck.includes('differs'),
           errorType: parsed.diagnosis.error_type || 'none',
           errorSummary: parsed.diagnosis.misconception || 'Conceptual review',
           mistakeStep: parsed.diagnosis.mistake_step || null,
           studentRationale: parsed.diagnosis.evidence || 'Parsed from student input',
-          severity: parsed.diagnosis.confidence < 0.5 ? 'minor' : 'moderate',
+          severity: noError ? 'none' : parsed.diagnosis.confidence < 0.5 ? 'minor' : 'moderate',
         },
         pedagogical: {
           strategy: parsed.pedagogy.strategy || 'GUIDED_DISCOVERY',

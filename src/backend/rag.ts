@@ -1,8 +1,15 @@
+import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 
-const EMBEDDINGS_CACHE_FILE = path.join(process.cwd(), 'data', 'rag', 'embeddings_cache.json');
+// v2: keyed by SHA-256 of the full text. The v1 file keyed on the first 48 bytes, so most records
+// shared a key and were given another record's embedding.
+const EMBEDDINGS_CACHE_FILE = path.join(process.cwd(), 'data', 'rag', 'embeddings_cache.v2.json');
+const embeddingKey = (text: string) => createHash('sha256').update(text).digest('hex');
+// Query embeddings are kept in memory only, so the cache file holds dataset records and stops growing per chat.
+const queryEmbeddings = new Map<string, number[]>();
+const MAX_QUERY_EMBEDDINGS = 500;
 
 interface EmbeddedRecord {
   id: string;
@@ -25,19 +32,21 @@ function loadCache() {
   }
 }
 
-// Debounced cache save to avoid hammering disk
+// Debounced cache save; written to a temp file and renamed, so a crash mid-write cannot corrupt it.
 let savePending = false;
 function saveCache() {
   if (savePending) return;
   savePending = true;
   setTimeout(() => {
-    try {
-      fs.writeFileSync(EMBEDDINGS_CACHE_FILE, JSON.stringify(embeddingsCache), 'utf-8');
-    } catch (e) {
-      console.warn('Failed to save embeddings cache', e);
-    }
-    savePending = false;
-  }, 2000);
+    const tmp = `${EMBEDDINGS_CACHE_FILE}.tmp`;
+    fs.promises
+      .writeFile(tmp, JSON.stringify(embeddingsCache), 'utf-8')
+      .then(() => fs.promises.rename(tmp, EMBEDDINGS_CACHE_FILE))
+      .catch((e) => console.warn('Failed to save embeddings cache', e))
+      .finally(() => {
+        savePending = false;
+      });
+  }, 5000);
 }
 
 function cosineSimilarity(vecA: number[], vecB: number[]) {
@@ -53,11 +62,12 @@ function cosineSimilarity(vecA: number[], vecB: number[]) {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-async function getEmbedding(ai: GoogleGenAI | null, text: string): Promise<number[]> {
+async function getEmbedding(ai: GoogleGenAI | null, text: string, persist = true): Promise<number[]> {
   if (!ai) return new Array(3072).fill(0);
-  const hash = Buffer.from(text).toString('base64').substring(0, 64);
-  if (embeddingsCache[hash]) {
-    return embeddingsCache[hash];
+  const hash = embeddingKey(text);
+  const cached = persist ? embeddingsCache[hash] : queryEmbeddings.get(hash);
+  if (cached) {
+    return cached;
   }
 
   try {
@@ -68,8 +78,13 @@ async function getEmbedding(ai: GoogleGenAI | null, text: string): Promise<numbe
     
     if (response.embeddings && response.embeddings.length > 0 && response.embeddings[0].values) {
       const vec = response.embeddings[0].values;
-      embeddingsCache[hash] = vec;
-      saveCache();
+      if (persist) {
+        embeddingsCache[hash] = vec;
+        saveCache();
+      } else {
+        if (queryEmbeddings.size >= MAX_QUERY_EMBEDDINGS) queryEmbeddings.delete(queryEmbeddings.keys().next().value!);
+        queryEmbeddings.set(hash, vec);
+      }
       return vec;
     }
   } catch (error) {
@@ -193,7 +208,7 @@ export async function initializeRAG(ai: GoogleGenAI | null) {
   
   // Assign cached embeddings immediately (no API calls needed for cached items)
   for (const record of [...misconceptionsCollection, ...pedagogyCollection, ...problemsCollection]) {
-    const hash = Buffer.from(record.textToEmbed).toString('base64').substring(0, 64);
+    const hash = embeddingKey(record.textToEmbed);
     if (embeddingsCache[hash]) {
       record.embedding = embeddingsCache[hash];
     }
@@ -228,7 +243,7 @@ export async function retrieveContext(
 
   if (ai) {
     try {
-      queryEmbedding = await getEmbedding(ai, query);
+      queryEmbedding = await getEmbedding(ai, query, false);
       isDenseAvailable = queryEmbedding.some(v => v !== 0);
     } catch {
       isDenseAvailable = false;

@@ -12,12 +12,13 @@ app = FastAPI(
     version="2.0.0",
 )
 
+# This service runs student code, so it only accepts requests from the tutor app on this machine.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 class AnalyzeRequest(BaseModel):
@@ -71,4 +72,5 @@ def get_candidates(code: str, top_k: int = 4):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("python_service.api:app", host="0.0.0.0", port=8000, reload=False)
+    import os
+    uvicorn.run("python_service.api:app", host="127.0.0.1", port=int(os.getenv("PYTHON_SERVICE_PORT", "8000")), reload=False)

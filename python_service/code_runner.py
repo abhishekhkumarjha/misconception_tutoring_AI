@@ -1,8 +1,9 @@
 import ast
-import io
+import json
+import os
+import subprocess
 import sys
-import contextlib
-import traceback
+import tempfile
 from typing import Dict, Any, List, Optional
 
 class PythonCodeRunner:
@@ -79,8 +80,33 @@ class PythonCodeRunner:
         return features
 
     @staticmethod
-    def execute_code(code: str, test_inputs: Optional[List[str]] = None, timeout_sec: float = 2.0) -> Dict[str, Any]:
-        """Safely execute Python code with redirected stdout and restricted globals."""
+    def check_policy(tree: ast.AST) -> Optional[str]:
+        """Reject code outside what a beginner exercise needs, before it is ever run.
+
+        Dunder attribute access is the standard way out of a restricted exec()
+        (e.g. ().__class__.__base__.__subclasses__()), so it is refused outright.
+        """
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
+                return f"Accessing '{node.attr}' is not permitted in the learning sandbox."
+            if isinstance(node, ast.Name) and node.id.startswith("__") and node.id != "__name__":
+                return f"Using '{node.id}' is not permitted in the learning sandbox."
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.split(".")[0] not in ALLOWED_IMPORTS:
+                        return f"Importing '{alias.name}' is not permitted in the learning sandbox."
+            if isinstance(node, ast.ImportFrom):
+                if (node.module or "").split(".")[0] not in ALLOWED_IMPORTS or node.level:
+                    return f"Importing from '{node.module}' is not permitted in the learning sandbox."
+        return None
+
+    @staticmethod
+    def execute_code(code: str, test_inputs: Optional[List[str]] = None, timeout_sec: float = 3.0) -> Dict[str, Any]:
+        """Run student code in a separate, time-limited Python process with restricted builtins.
+
+        This is a guard against accidents and casual misuse in a local learning tool,
+        not a security boundary for hostile code: serve it on localhost only.
+        """
         syntax = PythonCodeRunner.check_syntax(code)
         if not syntax["valid"]:
             return {
@@ -90,49 +116,93 @@ class PythonCodeRunner:
                 "output": "",
             }
 
-        # Disallow dangerous operations in student code
-        forbidden_keywords = ["import os", "import sys", "import subprocess", "import shutil", "__import__", "eval(", "exec("]
-        for kw in forbidden_keywords:
-            if kw in code:
+        violation = PythonCodeRunner.check_policy(syntax["tree"])
+        if violation:
+            return {"success": False, "error_type": "SecurityRestriction", "error": violation, "output": ""}
+
+        request = json.dumps({"code": code, "inputs": list(test_inputs or []), "allowed": sorted(ALLOWED_IMPORTS)})
+        env = {"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+        if os.name == "nt" and os.environ.get("SYSTEMROOT"):
+            env["SYSTEMROOT"] = os.environ["SYSTEMROOT"]  # needed by Python startup on Windows
+
+        with tempfile.TemporaryDirectory() as workdir:
+            try:
+                proc = subprocess.run(
+                    [sys.executable, "-I", "-S", "-c", _CHILD_RUNNER],
+                    input=request,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    timeout=timeout_sec,
+                    cwd=workdir,
+                    env=env,
+                    preexec_fn=_limit_resources if os.name == "posix" else None,
+                )
+            except subprocess.TimeoutExpired:
                 return {
                     "success": False,
-                    "error_type": "SecurityRestriction",
-                    "error": f"Security restriction: '{kw}' is not permitted in the learning sandbox.",
+                    "error_type": "TimeoutError",
+                    "error": f"TimeoutError: the code ran for more than {timeout_sec:g} seconds (is there an infinite loop?)",
                     "output": "",
                 }
 
-        stdout_buf = io.StringIO()
-        builtins_dict = __builtins__ if isinstance(__builtins__, dict) else __builtins__.__dict__
-        restricted_globals = {
-            "__builtins__": {
-                k: v for k, v in builtins_dict.items()
-                if k not in ["open", "compile", "exec", "eval", "input", "__import__"]
-            }
-        }
-
-        # If test inputs provided, mock input()
-        if test_inputs:
-            input_iter = iter(test_inputs)
-            restricted_globals["__builtins__"]["input"] = lambda *args: next(input_iter, "")
-        else:
-            restricted_globals["__builtins__"]["input"] = lambda *args: ""
-
         try:
-            with contextlib.redirect_stdout(stdout_buf):
-                exec(code, restricted_globals)
-            return {
-                "success": True,
-                "output": stdout_buf.getvalue(),
-                "error": None,
-                "error_type": None,
-            }
-        except Exception as e:
-            tb = traceback.format_exc()
-            clean_tb = "\n".join([line for line in tb.splitlines() if "code_runner.py" not in line])
-            return {
-                "success": False,
-                "error_type": type(e).__name__,
-                "error": f"{type(e).__name__}: {str(e)}",
-                "traceback": clean_tb,
-                "output": stdout_buf.getvalue(),
-            }
+            return json.loads(proc.stdout.strip().splitlines()[-1])
+        except (IndexError, json.JSONDecodeError):
+            reason = "the code used too much memory" if proc.returncode and not proc.stdout else (proc.stderr.strip()[-300:] or "no result")
+            return {"success": False, "error_type": "RuntimeError", "error": f"RuntimeError: {reason}", "output": ""}
+
+
+# Standard-library modules a beginner exercise may import; none give file, process or network access.
+ALLOWED_IMPORTS = {
+    "math", "cmath", "random", "statistics", "itertools", "functools", "collections", "string",
+    "fractions", "decimal", "operator", "re", "datetime", "heapq", "bisect", "copy", "typing", "dataclasses",
+}
+
+MAX_OUTPUT_CHARS = 20000
+
+
+def _limit_resources() -> None:
+    import resource
+    resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
+    resource.setrlimit(resource.RLIMIT_CPU, (5, 5))
+
+
+# Runs inside the child process: executes the student code with restricted builtins and prints one JSON line.
+_CHILD_RUNNER = r"""
+import builtins, io, json, sys, traceback
+req = json.loads(sys.stdin.read())
+allowed = set(req["allowed"])
+real_import = builtins.__import__
+def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+    if level or name.split(".")[0] not in allowed:
+        raise ImportError(f"Importing '{name}' is not permitted in the learning sandbox.")
+    return real_import(name, globals, locals, fromlist, level)
+inputs = iter(req["inputs"])
+safe_builtins = {k: v for k, v in vars(builtins).items()
+                 if k not in ("open", "compile", "exec", "eval", "input", "breakpoint", "help", "exit", "quit", "globals", "vars", "memoryview")}
+safe_builtins["__import__"] = safe_import
+# getattr(obj, "__class__") passes the dunder as a string, which the AST check cannot see.
+def _guard(fn):
+    def guarded(obj, name, *args):
+        if isinstance(name, str) and name.startswith("_"):
+            raise AttributeError(f"Accessing '{name}' is not permitted in the learning sandbox.")
+        return fn(obj, name, *args)
+    return guarded
+for _name in ("getattr", "setattr", "delattr", "hasattr"):
+    safe_builtins[_name] = _guard(getattr(builtins, _name))
+safe_builtins["input"] = lambda *args: next(inputs, "")
+out = io.StringIO()
+real_stdout = sys.stdout
+sys.stdout = out
+result = {"success": True, "error": None, "error_type": None}
+try:
+    exec(compile(req["code"], "<student code>", "exec"), {"__builtins__": safe_builtins, "__name__": "__main__"})
+except BaseException as e:
+    tb = traceback.format_exc().splitlines()
+    result = {"success": False, "error_type": type(e).__name__, "error": f"{type(e).__name__}: {e}",
+              "traceback": "\n".join(tb[-6:])}
+sys.stdout = real_stdout
+result["output"] = out.getvalue()[:%d]
+print(json.dumps(result))
+""" % MAX_OUTPUT_CHARS

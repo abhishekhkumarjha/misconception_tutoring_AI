@@ -123,8 +123,9 @@ function buildRagMirror(): string {
     console.log(`  RAG mirror: ${name} kept ${kept.length}/${lines.length} (removed ${lines.length - kept.length} test-set records)`);
   }
   fs.copyFileSync(path.join(ROOT, 'data/processed/conversation_bank.json'), path.join(mirror, 'data/processed/conversation_bank.json'));
-  const cache = path.join(mirror, 'data/rag/embeddings_cache.json');
-  if (!fs.existsSync(cache)) fs.copyFileSync(path.join(ROOT, 'data/rag/embeddings_cache.json'), cache);
+  const cache = path.join(mirror, 'data/rag/embeddings_cache.v2.json');
+  const source = path.join(ROOT, 'data/rag/embeddings_cache.v2.json');
+  if (!fs.existsSync(cache) && fs.existsSync(source)) fs.copyFileSync(source, cache);
   return mirror;
 }
 

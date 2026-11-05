@@ -10,8 +10,16 @@ interface PythonAnalysisPayload {
   expectedOutput?: string;
 }
 
-const FASTAPI_URL = 'http://127.0.0.1:8000/api/python/analyze';
-const FASTAPI_RUN_URL = 'http://127.0.0.1:8000/api/python/run';
+// Read at call time: server.ts loads .env after its imports have been evaluated.
+const serviceUrl = () => process.env.PYTHON_SERVICE_URL || 'http://127.0.0.1:8000';
+const FASTAPI_URL = () => `${serviceUrl()}/api/python/analyze`;
+const FASTAPI_RUN_URL = () => `${serviceUrl()}/api/python/run`;
+// 'python' on Windows, often only 'python3' on macOS/Linux.
+const pythonBin = () => process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+const pythonEnv = () => ({ ...process.env, PYTHONPATH: process.cwd(), PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' });
+// The analyzer makes a Gemini call; code execution itself is capped at a few seconds inside the runner.
+const ANALYZE_TIMEOUT_MS = 45000;
+const RUN_TIMEOUT_MS = 15000;
 
 /**
  * Execute Python enhanced misconception analysis.
@@ -26,7 +34,7 @@ export async function runEnhancedPythonAnalysis(
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
-    const response = await fetch(FASTAPI_URL, {
+    const response = await fetch(FASTAPI_URL(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -34,8 +42,9 @@ export async function runEnhancedPythonAnalysis(
     });
     clearTimeout(timeout);
 
-    if (response.ok) {
-      const data = await response.json();
+    const data = response.ok ? await response.json() : null;
+    // Another app may own the port and answer 200 with something else; only accept a real analysis.
+    if (data?.message && data?.analysis) {
       return {
         id: `py-resp-${Date.now()}`,
         ...data,
@@ -64,11 +73,17 @@ export async function runEnhancedPythonAnalysis(
 
 function executePythonCLI(payload: PythonAnalysisPayload): Promise<any> {
   return new Promise((resolve, reject) => {
-    const projectRoot = process.cwd();
-    const pyProcess = spawn('python', ['-m', 'python_service.enhanced_analyzer'], {
-      cwd: projectRoot,
-      env: { ...process.env, PYTHONPATH: projectRoot },
+    const pyProcess = spawn(pythonBin(), ['-m', 'python_service.enhanced_analyzer'], {
+      cwd: process.cwd(),
+      env: pythonEnv(),
     });
+    // Without these, a missing Python binary or a closed pipe is an unhandled 'error' event that kills Node.
+    pyProcess.on('error', reject);
+    pyProcess.stdin.on('error', reject);
+    const killTimer = setTimeout(() => {
+      pyProcess.kill();
+      reject(new Error('Python analyzer timed out'));
+    }, ANALYZE_TIMEOUT_MS);
 
     let stdoutData = '';
     let stderrData = '';
@@ -82,6 +97,7 @@ function executePythonCLI(payload: PythonAnalysisPayload): Promise<any> {
     });
 
     pyProcess.on('close', (code) => {
+      clearTimeout(killTimer);
       if (code === 0 && stdoutData.trim()) {
         try {
           // Parse the last JSON block output
@@ -106,15 +122,16 @@ export async function runPythonCodeSafely(code: string, testInputs?: string[]): 
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 4000);
-    const response = await fetch(FASTAPI_RUN_URL, {
+    const response = await fetch(FASTAPI_RUN_URL(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, testInputs }),
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    if (response.ok) {
-      return await response.json();
+    const data = response.ok ? await response.json() : null;
+    if (typeof data?.success === 'boolean') {
+      return data;
     }
   } catch {
     // Fallback through inline python execution
@@ -124,21 +141,26 @@ export async function runPythonCodeSafely(code: string, testInputs?: string[]): 
     const runnerScript = `
 import json, sys
 from python_service.code_runner import PythonCodeRunner
-code = sys.stdin.read()
-res = PythonCodeRunner.execute_code(code)
+req = json.loads(sys.stdin.read())
+res = PythonCodeRunner.execute_code(req["code"], req.get("testInputs"))
 print(json.dumps(res))
 `;
-    const py = spawn('python', ['-c', runnerScript], { cwd: process.cwd() });
+    const unavailable = { success: false, error: 'Execution output unavailable' };
+    const py = spawn(pythonBin(), ['-c', runnerScript], { cwd: process.cwd(), env: pythonEnv() });
+    py.on('error', () => resolve(unavailable));
+    py.stdin.on('error', () => resolve(unavailable));
+    const killTimer = setTimeout(() => py.kill(), RUN_TIMEOUT_MS);
     let out = '';
     py.stdout.on('data', (d) => (out += d.toString()));
     py.on('close', () => {
+      clearTimeout(killTimer);
       try {
         resolve(JSON.parse(out.trim()));
       } catch {
         resolve({ success: false, error: 'Execution output unavailable' });
       }
     });
-    py.stdin.write(code);
+    py.stdin.write(JSON.stringify({ code, testInputs }));
     py.stdin.end();
   });
 }
