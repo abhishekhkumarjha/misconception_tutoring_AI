@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Runtime embedding cache (rebuilt automatically by src/backend/rag.ts)
+data/rag/embeddings_cache.v2.json
+data/rag/*.tmp
